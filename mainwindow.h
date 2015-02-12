@@ -7,6 +7,7 @@
 #include <QFileDialog>
 #include <QDir>
 #include <QUrl>
+#include<QRgb>
 
 #include<QDebug>
 
@@ -32,6 +33,7 @@ private:
     QPixmap currentPic;
     QFile optFile;
     inline QRgb getPureColor(int h, int s, int v);
+
     Ui::MainWindow *ui;
 };
 
