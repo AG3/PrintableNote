@@ -44,9 +44,9 @@ void MainWindow::on_button_process_clicked()
 
 
     tpic=currentPic.toImage();
-    npic=new QImage(tpic.size(),tpic.format());
     picwidth=tpic.width();
     picheight=tpic.height();
+    npic=new QImage(tpic.size(),tpic.format());
     for(i=0;i<picwidth;i++)
     {
         for(j=0;j<picheight;j++)
@@ -65,9 +65,9 @@ void MainWindow::on_button_process_clicked()
     }
 
     //然后遍历每个像素，当这个像素的颜色比周围（各上下左右各扩展dist像素）的平均值浅时认定为白
-    int dist=40;
+    int dist=30,anotherMagicNum=30;
     double avr;
-    double magicNum=0.95;
+    double magicNum=0.9;
     for(i=0;i<picwidth;i++)
     {
         for(j=0;j<picheight;j++)
@@ -82,9 +82,7 @@ void MainWindow::on_button_process_clicked()
             {
                 tcol=tpic.pixel(i,j);
                 tcol.getHsv(&h,&s,&v);
-                if(i==178 && j==484) qDebug()<<h<<s<<v;
                 npic->setPixel(i,j,getPureColor(h,s,v));
-                //tpic.setPixel(i,j,QColor(0,0,0).rgb());
             }
         }
     }
@@ -93,12 +91,11 @@ void MainWindow::on_button_process_clicked()
     npic->save("opt.png");
 }
 
-inline bool isBlack(int h,int s,int v)
+inline bool isBlack(int h,int s,int v)//Finally。。。还有蓝色
 {
-    if(h>=205 && h<=260 && s>30 && v>40) return false;
-    if(h==233 &&s==190 &&v==82) qDebug()<<"SSS";
-    if(v<=64)return true;
-    if(v<153 && s<=38)return true;
+    if(v<=63.75 && s<=63.75)return true;
+    if(s>=63.75 && v<=s*(-0.23)+78.41)return true;
+    if(s<=63.75 && v<=s*(-4.37)+342.34 && v<=120)return true;
     return false;
 }
 
@@ -109,6 +106,8 @@ inline QRgb MainWindow::getPureColor(int h, int s, int v)
         return QColor(0,0,0).rgb();//Black
     }
 
+    if(s>=255*0.2)
+    {
     if((h>=0&&h<=16) || h>=340)
     {
         return QColor(255,0,0).rgb();//Red
@@ -141,10 +140,6 @@ inline QRgb MainWindow::getPureColor(int h, int s, int v)
     {
         return QColor(0,0,255).rgb();//Darkblue
     }
-
-    if(v>152 && s<=50)
-    {
-        return QColor(255,255,255).rgb();//White
     }
-    //return QColor::fromHsv(h,s,v).rgb();
+    return QColor(255,255,255).rgb();
 }

@@ -8,7 +8,8 @@
 #include <QDir>
 #include <QUrl>
 #include<QRgb>
-
+#include<cmath>
+#include<cstdlib>
 #include<QDebug>
 
 namespace Ui {
