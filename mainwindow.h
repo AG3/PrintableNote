@@ -8,9 +8,16 @@
 #include <QDir>
 #include <QUrl>
 #include<QRgb>
+#include<cv.h>
+#include<highgui.h>
+#include<imgcodecs.hpp>
+#include"imgproc.hpp"
+#include"core.hpp"
 
 #include<QDebug>
 
+using namespace cv;
+using namespace std;
 namespace Ui {
 class MainWindow;
 }
@@ -25,15 +32,14 @@ public:
 
 private slots:
     void on_button_iptfile_clicked();
-
     void on_button_process_clicked();
 
 private:
     QString picurl,dicurl;
-    QPixmap currentPic;
-    QFile optFile;
-    inline QRgb getPureColor(int h, int s, int v);
-
+    QColor color;
+    Mat iptMat,hsvMat;
+    void Cut_img(Mat src_img,int m,int n,vector<int> ceil_avr);
+    void removeBackground();
     Ui::MainWindow *ui;
 };
 

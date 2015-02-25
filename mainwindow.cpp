@@ -1,6 +1,9 @@
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
 
+using namespace std;
+using namespace cv;
+
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
     ui(new Ui::MainWindow)
@@ -15,10 +18,7 @@ MainWindow::~MainWindow()
 
 void MainWindow::on_button_iptfile_clicked()
 {
-    picurl=QFileDialog::getOpenFileUrl().toString(QUrl::RemoveScheme);
-    picurl=picurl.right(picurl.size()-3);
-    currentPic.load(picurl);
-    ui->label_rawpic->setPixmap(currentPic.scaled(ui->label_rawpic->size()));
+    iptMat=imread("./zkx.jpg");
 }
 
 int minn(int a,int b)
@@ -31,120 +31,153 @@ int maxx(int a,int b)
     if(a>b)return a;
     return b;
 }
-int sum2i[10000][10000];
-int gray[10000][10000];
-void MainWindow::on_button_process_clicked()
+
+inline bool isBlack(int h,int s,int v)//Finally。。。还有蓝色
 {
-    //首先转换为灰度图分离背景和内容（不知道为什么背景一定比内容浅）
-    QImage tpic,*npic;
-    QColor tcol;
-    QRgb WHITE=QColor(255,255,255).rgb();
-    int h,s,v,i,j,r,g,b,picwidth,picheight,k;
-    int gr;
-
-
-    tpic=currentPic.toImage();
-    npic=new QImage(tpic.size(),tpic.format());
-    picwidth=tpic.width();
-    picheight=tpic.height();
-    for(i=0;i<picwidth;i++)
-    {
-        for(j=0;j<picheight;j++)
-        {
-            npic->setPixel(i,j,WHITE);//Init npic
-
-            tcol=tpic.pixel(i,j);
-            tcol.getRgb(&r,&g,&b);
-            gr= (r * 11 + g * 16 + b * 5)/32;
-            gray[i][j]=gr;
-            for(int k=0;k<=j;k++)
-            {
-                sum2i[i][j]+=gray[i][k];
-            }
-        }
-    }
-
-    //然后遍历每个像素，当这个像素的颜色比周围（各上下左右各扩展dist像素）的平均值浅时认定为白
-    int dist=40;
-    double avr;
-    double magicNum=0.95;
-    for(i=0;i<picwidth;i++)
-    {
-        for(j=0;j<picheight;j++)
-        {
-            int ri=minn(i+dist,picwidth),bot=minn(j+dist,picheight),up=maxx(j-dist,0),lef=maxx(i-dist,0);
-            for(k=lef;k<ri;k++)
-            {
-                avr+=(sum2i[k][bot]-sum2i[k][up])*1.0/(bot-up+1)*1.0;
-            }
-            avr/=(ri-lef)*1.0;
-            if(gray[i][j]<avr*magicNum)
-            {
-                tcol=tpic.pixel(i,j);
-                tcol.getHsv(&h,&s,&v);
-                if(i==178 && j==484) qDebug()<<h<<s<<v;
-                npic->setPixel(i,j,getPureColor(h,s,v));
-                //tpic.setPixel(i,j,QColor(0,0,0).rgb());
-            }
-        }
-    }
-
-    ui->label_respic->setPixmap(QPixmap::fromImage(*npic).scaled(ui->label_respic->size()));
-    npic->save("opt.png");
+if(v<=63.75 && s<=63.75)return true;
+if(s>=63.75 && v<=s*(-0.23)+78.41)return true;
+if(s<=63.75 && v<=s*(-4.37)+342.34 && v<=160)return true;
+return false;
 }
 
-inline bool isBlack(int h,int s,int v)
+inline bool isWhite(int h,int s,int v)
 {
-    if(h>=205 && h<=260 && s>30 && v>40) return false;
-    if(h==233 &&s==190 &&v==82) qDebug()<<"SSS";
-    if(v<=64)return true;
-    if(v<153 && s<=38)return true;
+    if(s<=63.75 && v>=120)return true;
     return false;
 }
 
-inline QRgb MainWindow::getPureColor(int h, int s, int v)
+void MainWindow::Cut_img(Mat src_img, int m, int n, vector<int> ceil_avr)
 {
-    if(isBlack(h,s,v))
-    {
-        return QColor(0,0,0).rgb();//Black
-    }
+    int h,s,v;
+    int height = src_img.rows;
+    int width  = src_img.cols;
 
-    if((h>=0&&h<=16) || h>=340)
-    {
-        return QColor(255,0,0).rgb();//Red
-    }
-    if(h>=17 && h<=35)
-    {
-        return QColor(255,165,0).rgb();//Orange
-    }
-    if(h>=36 && h<=65)
-    {
-        return QColor(255,255,0).rgb();//Yellow
-    }
-    if(h>=66 && h<=165)
-    {
-        return QColor(0,255,0).rgb();//Green
-    }
-    if(h>=166 && h<=205)
-    {
-        return QColor(0,204,255).rgb();//Lightblue
-    }
-    if(h>=256 && h<=285)
-    {
-        return QColor(173,33,173).rgb();//Purple
-    }
-    if(h>=286 && h<=339)
-    {
-        return QColor(255,110,230).rgb();//Pink
-    }
-    if(h>=206 && h<=255)
-    {
-        return QColor(0,0,255).rgb();//Darkblue
-    }
+    int ceil_height = height/m;
+    int ceil_width  = width/n;
 
-    if(v>152 && s<=50)
-    {
-        return QColor(255,255,255).rgb();//White
-    }
-    //return QColor::fromHsv(h,s,v).rgb();
+    int x,y;
+
+    Mat roi_img;
+    int avr,mx=0,mi=300;
+    for(int i = 0;i<m;i++)
+        for(int j = 0;j<n;j++){
+            Rect rect(j*ceil_width,i*ceil_height,ceil_width,ceil_height);
+            src_img(rect).copyTo(roi_img);
+            avr=0;
+            mx=0;
+            mi=300;
+            for(int k=0;k<ceil_height;k++)
+            {
+                for(int l=0;l<ceil_width;l++)
+                {
+                    if(roi_img.at<Vec3b>(i,j)[2]>mx)mx=roi_img.at<Vec3b>(i,j)[2];
+                    if(roi_img.at<Vec3b>(i,j)[2]<mi)mi=roi_img.at<Vec3b>(i,j)[2];
+                }
+            }
+            avr=(mx+mi)/2;
+            for(int k=0;k<ceil_height;k++)
+            {
+                for(int l=0;l<ceil_width;l++)
+                {
+                    x=i*ceil_height+k;
+                    y=j*ceil_width+l;
+                    h=src_img.at<Vec3b>(x,y)[0];
+                    s=src_img.at<Vec3b>(x,y)[1];
+                    v=src_img.at<Vec3b>(x,y)[2];
+                    if(v>avr*0.5)//Magic num here
+                    {
+                        iptMat.at<Vec3b>(x,y)[0]=255;
+                        iptMat.at<Vec3b>(x,y)[1]=255;
+                        iptMat.at<Vec3b>(x,y)[2]=255;
+                    }
+                    else if(isBlack(h,s,v))
+                    {
+                        iptMat.at<Vec3b>(x,y)[0]=0;
+                        iptMat.at<Vec3b>(x,y)[1]=0;
+                        iptMat.at<Vec3b>(x,y)[2]=0;
+                    }
+                }
+            }
+            ceil_avr.push_back(avr);
+
+        }
 }
+
+
+void MainWindow::removeBackground()
+{
+    vector<int> vm(10000);
+    MatIterator_<Vec3b> it, end;
+    int width=hsvMat.cols,height=hsvMat.rows;
+    int roiW=width/100,roiH=height/100;
+    int cw,ch;
+    float avr,sc;
+    Cut_img(hsvMat,100,100,vm);
+
+
+    //qDebug()<<s;
+}
+
+void MainWindow::on_button_process_clicked()
+{
+    cvtColor(iptMat,hsvMat,CV_BGR2HSV_FULL);
+    removeBackground();
+    //imshow(iptMat);
+    int lowThreshold=40,ratio=3,kernel_size=3;
+    Mat gray,edges,res;
+    //cvtColor(iptMat,gray,CV_BGR2GRAY);
+    //blur(gray,edges,Size(3,3));
+    //Canny(edges,edges, lowThreshold, lowThreshold*ratio, kernel_size );
+    //imshow("d",edges);
+    //blur(edges,res,Size(3,3));
+
+    imwrite("./opt.png",iptMat);
+    qDebug()<<"finish";
+}
+
+
+
+/*inline QRgb MainWindow::getPureColor(int h, int s, int v)
+{
+if(isBlack(h,s,v))
+{
+return QColor(0,0,0).rgb();//Black
+}
+if(s>=255*0.2)
+{
+if((h>=0&&h<=16) || h>=340)
+{
+return QColor(255,0,0).rgb();//Red
+}
+if(h>=17 && h<=35)
+{
+return QColor(255,165,0).rgb();//Orange
+}
+if(h>=36 && h<=65)
+{
+return QColor(255,255,0).rgb();//Yellow
+}
+if(h>=66 && h<=165)
+{
+return QColor(0,255,0).rgb();//Green
+}
+if(h>=166 && h<=205)
+{
+return QColor(0,204,255).rgb();//Lightblue
+}
+if(h>=256 && h<=285)
+{
+return QColor(173,33,173).rgb();//Purple
+}
+if(h>=286 && h<=339)
+{
+return QColor(255,110,230).rgb();//Pink
+}
+if(h>=206 && h<=255)
+{
+return QColor(0,0,255).rgb();//Darkblue
+}
+}
+return QColor(255,255,255).rgb();
+}
+*/
